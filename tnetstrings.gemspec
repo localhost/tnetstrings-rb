@@ -4,7 +4,7 @@ Gem::Specification.new do |s|
   s.license       = 'MIT'
   s.author        = 'Alex Brem'
   s.email         = 'alex@fluktuation.net'
-  s.homepage      = 'https://github.com/localhost/tnetstrings'
+  s.homepage      = 'https://github.com/localhost/tnetstrings-rb'
   s.summary       = %Q{tnetstrings for ruby}
   s.description   = %Q{tnetstrings for ruby}
 
