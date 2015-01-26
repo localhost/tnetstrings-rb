@@ -27,8 +27,8 @@ module TNetStrings
       when '~'
         raise "Payload must be 0 length for null." unless payload.length == 0
         nil
-    else
-      raise "Invalid payload type: #{payload_type}"
+      else
+        raise "Invalid payload type: #{payload_type}"
     end
 
     [ value, remain ]
