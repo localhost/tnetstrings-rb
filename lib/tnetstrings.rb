@@ -1,7 +1,12 @@
+#!/usr/bin/env ruby -w
+
+# encoding: utf-8
+
 module TNetStrings
   def self.dump(data)
     case data
-      when String, Symbol then "#{data.length}:#{data},"
+      when String then "#{data.bytesize}:#{data.bytes.pack('C*')},"
+      when Symbol then "#{data.to_s.length}:#{data.to_s},"
       when Fixnum  then "#{data.to_s.length}:#{data.to_s}#"
       when Float then "#{data.to_s.length}:#{data.to_s}^"
       when TrueClass then "4:true!"
@@ -10,11 +15,17 @@ module TNetStrings
       when Array then dump_array(data)
       when Hash then dump_hash(data)
     else
-      raise "Can't serialize stuff that's '#{data.class}'."
+      if data.respond_to?(:to_s)
+        s = data.to_s
+        "#{s.length}:#{s},"
+      else
+        raise "Can't serialize stuff that's '#{data.class}'."
+      end
     end
   end
 
   def self.parse(data)
+    raise "Invalid data." if data.empty?
     payload, payload_type, remain = parse_payload(data)
 
     value = case payload_type
@@ -42,7 +53,7 @@ module TNetStrings
     if len == 0
       payload = ''
     else
-      payload, extra = extra[0..len-1], extra[len..-1]
+      payload, extra = extra.byteslice(0..len-1), extra.byteslice(len..-1)
     end
     payload_type, remain = extra[0], extra[1..-1]
 
@@ -125,6 +136,22 @@ if $0 == __FILE__
 
       s, r = TNetStrings::parse(r)
       assert_equal "foobar", s
+      assert_equal "", r
+    end
+
+    def test_parse_utf8_bytes
+      n = "3:foo,2:\u00B5,4:\xf0\x9f\x98\x87,"
+
+      s, r = TNetStrings::parse(n)
+      assert_equal "foo", s
+      assert_equal "2:µ,4:😇,", r
+
+      s, r = TNetStrings::parse(r)
+      assert_equal "µ", s
+      assert_equal "4:\u{1F607},".force_encoding('UTF-8'), r
+
+      s, r = TNetStrings::parse(r)
+      assert_equal "😇", s
       assert_equal "", r
     end
 
@@ -240,12 +267,44 @@ if $0 == __FILE__
       assert_equal "", r
     end
 
+    def test_parse_exceeding
+      s = "3:foo,4:true!"
+
+      v, r = TNetStrings::parse(s)
+      assert_equal "foo", v
+      assert_equal "4:true!", r
+
+      v, r = TNetStrings::parse(r)
+      assert_equal true, v
+      assert_equal "", r
+
+      msg = ""
+      begin
+        v, r = TNetStrings::parse(r)
+      rescue => e
+        msg = e.message
+      end
+      assert_equal "Invalid data.", msg
+      assert_equal "", r
+    end
+
     def test_dump_strings
       s = TNetStrings::dump("foobar")
       assert_equal "6:foobar,", s
 
       s << TNetStrings::dump("baz")
       assert_equal "6:foobar,3:baz,", s
+    end
+
+    def test_dump_byte_strings
+      s = TNetStrings::dump("ßöö")
+      assert_equal "6:\xC3\x9F\xC3\xB6\xC3\xB6,".unpack('C*'), s.bytes
+
+      s << TNetStrings::dump("µ")
+      assert_equal "6:ßöö,2:µ,", s.force_encoding("UTF-8")
+
+      s << TNetStrings::dump("\u{1F607}").force_encoding('UTF-8')
+      assert_equal "6:ßöö,2:µ,4:😇,", s.force_encoding("UTF-8")
     end
 
     def test_dump_symbol
